@@ -4,7 +4,7 @@ import (
     "log"
 
     "github.com/hibiken/asynq"
-    "zosma-api-server/tasks"
+    "github.com/rampenke/zosma-api-server/tasks"
 )
 
 const redisAddr = "127.0.0.1:6379"

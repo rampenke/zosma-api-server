@@ -13,7 +13,7 @@ import (
     "time"
 
     "github.com/hibiken/asynq"
-    "zosma-api-server/tasks"
+    "github.com/rampenke/zosma-api-server/tasks"
 )
 
 const redisAddr = "127.0.0.1:6379"
@@ -84,13 +84,9 @@ func main() {
    if err != nil {
 	log.Fatalf("Unexpected API response: %v", err)
    }
-   //fmt.Printf("result: %v", string(res.Result))
+   //fmt.Printf("result: %v", respStruct)
    reader := base64.NewDecoder(base64.StdEncoding, strings.NewReader(string(respStruct.Images[0])))
-   config, format, err := image.DecodeConfig(reader)
-   if err != nil {
-	log.Fatal(err)
-   }
-   fmt.Println("Width:", config.Width, "Height:", config.Height, "Format:", format)
+   
    f, err := os.OpenFile("sample1.png", os.O_WRONLY|os.O_CREATE, 0777)
    if err != nil {
         log.Fatal(err)
@@ -98,11 +94,11 @@ func main() {
    }
    m, _, err := image.Decode(reader)
    if err != nil {
-	log.Fatal(err)
+	log.Fatalf("image.Decode error: %v", err)
    }
-       err = png.Encode(f, m)
+  err = png.Encode(f, m)
   if err != nil {
-        log.Fatal(err)
+	log.Fatalf("png.Encode error: %v", err)
         return
   }
 }
