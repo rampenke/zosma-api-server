@@ -2,6 +2,8 @@ package main
 
 import (
      "os"
+     "github.com/joho/godotenv"
+     "github.com/kelseyhightower/envconfig"
      "encoding/json"
      "encoding/base64"
      "image"
@@ -16,7 +18,12 @@ import (
     "github.com/rampenke/zosma-api-server/tasks"
 )
 
-const redisAddr = "127.0.0.1:6379"
+type Config struct {
+	RedisAddr   string `envconfig:"REDIS_ADDR" required:"true"`
+	RedisPassword  string `envconfig:"REDIS_PASSWORD" required:"true"`
+}
+var cfg Config
+
 
 func waitForResult(ctx context.Context, i *asynq.Inspector, queue, taskID string) (*asynq.TaskInfo, error) {
 	t := time.NewTicker(time.Second)
@@ -38,8 +45,13 @@ func waitForResult(ctx context.Context, i *asynq.Inspector, queue, taskID string
 	}
 }
 
+
 func main() {
-    conn := asynq.RedisClientOpt{Addr: redisAddr}
+    _ = godotenv.Overload()
+    if err := envconfig.Process("", &cfg); err != nil {
+	    log.Fatal(err.Error())
+    }    
+    conn := asynq.RedisClientOpt{Addr: cfg.RedisAddr, Password: cfg.RedisPassword}
     client := asynq.NewClient(conn)
     defer client.Close()
     inspector := asynq.NewInspector(conn)

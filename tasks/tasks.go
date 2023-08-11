@@ -170,6 +170,6 @@ func (processor *Txt2imgProcessor) ProcessTask(ctx context.Context, t *asynq.Tas
     return nil
 }
 
-func NewTxt2imgProcessor() *Txt2imgProcessor {
-	return &Txt2imgProcessor{ host: "http://127.0.0.1:7860"}
+func NewTxt2imgProcessor(host string) *Txt2imgProcessor {
+	return &Txt2imgProcessor{ host: host}
 }
