@@ -2,7 +2,11 @@ module github.com/rampenke/zosma-api-server
 
 go 1.19
 
-require github.com/hibiken/asynq v0.24.1
+require (
+	github.com/hibiken/asynq v0.24.1
+	github.com/joho/godotenv v1.5.1
+	github.com/kelseyhightower/envconfig v1.4.0
+)
 
 require (
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
