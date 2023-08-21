@@ -1,4 +1,4 @@
-module github.com/rampenke/zosma-api-server
+module github.com/rampenke/zosma-sd-server
 
 go 1.19
 
