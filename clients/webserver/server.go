@@ -1,0 +1,123 @@
+package main
+
+import (
+	"net/http"
+
+	"context"
+	"encoding/json"
+	"fmt"
+	"log"
+	"time"
+
+	"github.com/hibiken/asynq"
+	"github.com/joho/godotenv"
+	"github.com/kelseyhightower/envconfig"
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
+	"github.com/rampenke/zosma-sd-server/tasks"
+)
+
+type Config struct {
+	RedisAddr     string `envconfig:"REDIS_ADDR" required:"true"`
+	RedisPassword string `envconfig:"REDIS_PASSWORD" required:"true"`
+}
+
+var cfg Config
+
+type ServerContext struct {
+	echo.Context
+}
+
+const PromptQueue = "default"
+
+func waitForResult(ctx context.Context, i *asynq.Inspector, queue, taskID string) (*asynq.TaskInfo, error) {
+	t := time.NewTicker(time.Second)
+	defer t.Stop()
+	for {
+		select {
+		case <-t.C:
+			taskInfo, err := i.GetTaskInfo(queue, taskID)
+			if err != nil {
+				return nil, err
+			}
+			if taskInfo.CompletedAt.IsZero() {
+				continue
+			}
+			return taskInfo, nil
+		case <-ctx.Done():
+			return nil, fmt.Errorf("context closed")
+		}
+	}
+}
+
+func ProcessQuery(c echo.Context, client *asynq.Client, inspector *asynq.Inspector) (*tasks.TextToImageResponse, error) {
+
+	request := &tasks.TextToImageRequest{}
+	err := c.Bind(&request)
+	if err != nil {
+		return nil, err
+	}
+
+	task, err := tasks.NewTxt2imgTask(request)
+	if err != nil {
+		log.Printf("could not create task: %v", err)
+		return nil, err
+	}
+	info, err := client.Enqueue(task, asynq.Queue(PromptQueue), asynq.MaxRetry(10), asynq.Timeout(3*time.Minute), asynq.Retention(2*time.Hour))
+	if err != nil {
+		log.Printf("could not enqueue task: %v", err)
+		return nil, err
+	}
+	log.Printf("enqueued task: id=%s queue=%s", info.ID, info.Queue)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	res, err := waitForResult(ctx, inspector, PromptQueue, info.ID)
+	if err != nil {
+		log.Printf("unable to wait for resilt: %v", err)
+		return nil, err
+	}
+
+	var respStruct = &tasks.TextToImageResponse{}
+	err = json.Unmarshal(res.Result, respStruct)
+	if err != nil {
+		log.Printf("Unexpected API response: %v", err)
+		return nil, err
+	}
+
+	return &tasks.TextToImageResponse{
+		Images:   respStruct.Images,
+		Seeds:    respStruct.Seeds,
+		Subseeds: respStruct.Subseeds,
+	}, nil
+}
+
+func main() {
+
+	_ = godotenv.Overload()
+	if err := envconfig.Process("", &cfg); err != nil {
+		log.Fatal(err.Error())
+	}
+	conn := asynq.RedisClientOpt{Addr: cfg.RedisAddr, Password: cfg.RedisPassword}
+	client := asynq.NewClient(conn)
+	defer client.Close()
+	inspector := asynq.NewInspector(conn)
+
+	e := echo.New()
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins: []string{"*", "https://zosma.mcntech.com"},
+		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept},
+	}))
+
+	e.GET("/", func(c echo.Context) error {
+		return c.String(http.StatusOK, "Hello, World!")
+	})
+	e.POST("/sdapi/v1/txt2img", func(c echo.Context) error {
+		res, err := ProcessQuery(c, client, inspector)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, err)
+		}
+		return c.JSON(http.StatusOK, res)
+	})
+	e.Logger.Fatal(e.Start(":1324"))
+}
