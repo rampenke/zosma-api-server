@@ -1,21 +1,23 @@
 package tasks
 
 import (
-    "bytes"
-    "context"
-    "errors"
-    "io"
-    "encoding/json"
-    "fmt"
-    "log"
-    "time"
-    "github.com/hibiken/asynq"
-    "net/http"
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"time"
+
+	"github.com/hibiken/asynq"
 )
 
 // A list of task types.
 const (
-    TypeTxt2img     = "text:image"
+	TypeTxt2img  = "text:image"
+	Txt2imgQueue = "default"
 )
 
 type JsonTextToImageResponse struct {
@@ -60,14 +62,13 @@ type TextToImageResponse struct {
 // A task consists of a type and a payload.
 //----------------------------------------------
 
-
 func NewTxt2imgTask(req *TextToImageRequest) (*asynq.Task, error) {
-    payload, err := json.Marshal(req)
-    if err != nil {
-        return nil, err
-    }
-    // task options can be passed to NewTask, which can be overridden at enqueue time.
-    return asynq.NewTask(TypeTxt2img, payload, asynq.MaxRetry(5), asynq.Timeout(20 * time.Minute)), nil
+	payload, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+	// task options can be passed to NewTask, which can be overridden at enqueue time.
+	return asynq.NewTask(TypeTxt2img, payload, asynq.MaxRetry(5), asynq.Timeout(20*time.Minute)), nil
 }
 
 //---------------------------------------------------------------
@@ -78,11 +79,10 @@ func NewTxt2imgTask(req *TextToImageRequest) (*asynq.Task, error) {
 // that satisfies asynq.Handler interface. See examples below.
 //---------------------------------------------------------------
 
-
 // ImageProcessor implements asynq.Handler interface.
 type Txt2imgProcessor struct {
-    // ... fields for struct
-    host string
+	// ... fields for struct
+	host string
 }
 
 func (api *Txt2imgProcessor) TextToImage(req *TextToImageRequest) (*TextToImageResponse, error) {
@@ -146,30 +146,30 @@ func (api *Txt2imgProcessor) TextToImage(req *TextToImageRequest) (*TextToImageR
 }
 
 func (processor *Txt2imgProcessor) ProcessTask(ctx context.Context, t *asynq.Task) error {
-    var p TextToImageRequest
-    if err := json.Unmarshal(t.Payload(), &p); err != nil {
-        return fmt.Errorf("json.Unmarshal failed: %v: %w", err, asynq.SkipRetry)
-    }
-    log.Printf("Generating image for prompt: %s", p.Prompt)
-    //res := []byte("Welcome")
-    res, err := processor.TextToImage(&p)
-    if err != nil {
-        log.Printf("TextToImage Failed: %v", err)
-        return err
-    }
-    jsonRes, err := json.Marshal(res)
-    if err != nil {
-            return err
-    }
+	var p TextToImageRequest
+	if err := json.Unmarshal(t.Payload(), &p); err != nil {
+		return fmt.Errorf("json.Unmarshal failed: %v: %w", err, asynq.SkipRetry)
+	}
+	log.Printf("Generating image for prompt: %s", p.Prompt)
+	//res := []byte("Welcome")
+	res, err := processor.TextToImage(&p)
+	if err != nil {
+		log.Printf("TextToImage Failed: %v", err)
+		return err
+	}
+	jsonRes, err := json.Marshal(res)
+	if err != nil {
+		return err
+	}
 
-    if _, err := t.ResultWriter().Write(jsonRes); err != nil {
-        log.Printf("Failed to write task result: %v", err)
-        return err
-    }
-    // Image resizing code ...
-    return nil
+	if _, err := t.ResultWriter().Write(jsonRes); err != nil {
+		log.Printf("Failed to write task result: %v", err)
+		return err
+	}
+	// Image resizing code ...
+	return nil
 }
 
 func NewTxt2imgProcessor(host string) *Txt2imgProcessor {
-	return &Txt2imgProcessor{ host: host}
+	return &Txt2imgProcessor{host: host}
 }

@@ -29,9 +29,7 @@ func main() {
 			Concurrency: 10,
 			// Optionally specify multiple queues with different priority.
 			Queues: map[string]int{
-				"critical": 6,
-				"default":  3,
-				"low":      1,
+				tasks.Txt2imgQueue: 3,
 			},
 			// See the godoc for other configuration options
 		},
